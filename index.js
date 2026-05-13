@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-// JVgE0erVSCSlIDru
 
 // instance
 const app = express();
@@ -14,7 +13,7 @@ app.use(express.json());
 
 // database
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.89rnkti.mongodb.net/?appName=Cluster0`;
-console.log(uri);
+// console.log(uri);
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -29,13 +28,12 @@ async function run() {
     // Connect the client to the server
     await client.connect();
     console.log('Connected your db');
-    // Get the database and collection on which to run the operation
+    // =================   DATABASE =======================
     const database = client.db('jobsDB2');
     const jobsCollection = database.collection('jobsColl2');
     const applicationsCollection = database.collection('appsColl2');
-    //=====================================================
 
-    //all and some jobs read opreation
+    // =================   JOBS  =======================
     app.get('/jobs', async (req, res) => {
       const email = req.query.email;
       let query = {};
@@ -47,50 +45,69 @@ async function run() {
       res.send(result);
     });
 
-    //one job read opreation
     app.get('/jobs/:id', async (req, res) => {
       const query = { _id: new ObjectId(req.params.id) };
       const result = await jobsCollection.findOne(query);
       res.send(result);
     });
 
-    // jobs create opreation
-    app.post('/jobs', async (req, res) => {
+    app.post('/jobs/add', async (req, res) => {
       const doc = req.body;
       const result = await jobsCollection.insertOne(doc);
       res.send(result);
     });
 
-    // ===========================================================
+    // =================   APPLICATIONS  =======================
 
-    //some applications read opreation
-    app.get('/applications', async (req, res) => {
+    app.get('/applications/me', async (req, res) => {
       const query = { applicant_email: req.query.email };
       const cursor = applicationsCollection.find(query);
       const result = await cursor.toArray();
 
-      // aggregate data
+      // === aggregate data ===
       for (const item of result) {
         // console.log(item.job_id);
-        const queryAgain = { _id: new ObjectId(item.job_id) };
-        const resultAgain = await jobsCollection.findOne(queryAgain);
+        const querySecond = { _id: new ObjectId(item.job_id) };
+        const resultSecond = await jobsCollection.findOne(querySecond);
 
-        if (resultAgain) {
-          item.title = resultAgain.title;
-          item.company = resultAgain.company;
-          item.company_logo = resultAgain.company_logo;
-          item.location = resultAgain.location;
-          item.jobType = resultAgain.jobType;
+        if (resultSecond) {
+          item.title = resultSecond.title;
+          item.company = resultSecond.company;
+          item.company_logo = resultSecond.company_logo;
+          item.location = resultSecond.location;
+          item.jobType = resultSecond.jobType;
         }
       }
 
       res.send(result);
     });
 
-    //one application create opreation
-    app.post('/applications', async (req, res) => {
+    app.post('/applications/me/apply', async (req, res) => {
       const doc = req.body;
       const result = await applicationsCollection.insertOne(doc);
+      // console.log(result);
+
+      // === agreegate data ===
+      const querySecond = { _id: new ObjectId(doc.job_id) };
+      const resultSecond = await jobsCollection.findOne(querySecond);
+      // console.log(resultSecond);
+
+      let count = 0;
+      if (resultSecond?.applicationCount) {
+        count = resultSecond.applicationCount + 1;
+      } else {
+        count = 1;
+      }
+
+      const queryThird = { _id: new ObjectId(doc.job_id) };
+      const updateDocThird = {
+        $set: {
+          applicationCount: count,
+        },
+      };
+      const resultThird = await jobsCollection.updateOne(queryThird, updateDocThird);
+      console.log(resultThird);
+
       res.send(result);
     });
 
@@ -105,7 +122,7 @@ async function run() {
 run();
 
 app.get('/', (req, res) => {
-  res.send('Hello World!');
+  res.send('Server is running');
 });
 
 app.listen(port, () => {
