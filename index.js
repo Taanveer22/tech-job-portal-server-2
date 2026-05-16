@@ -55,8 +55,15 @@ async function run() {
     });
 
     app.post('/jobs/add', async (req, res) => {
+      console.log(req.body);
       const doc = req.body;
       const result = await jobsCollection.insertOne(doc);
+      res.send(result);
+    });
+
+    app.delete('/jobs/delete/:id', async (req, res) => {
+      const query = { _id: new ObjectId(req.params.id) };
+      const result = await jobsCollection.deleteOne(query);
       res.send(result);
     });
 
