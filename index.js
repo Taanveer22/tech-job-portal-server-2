@@ -28,6 +28,9 @@ async function run() {
     // Connect the client to the server
     await client.connect();
     console.log('Connected your db');
+    // Send a ping to confirm a successful connection
+    await client.db('admin').command({ ping: 1 });
+    console.log('Pinged your deployment');
     // =================   DATABASE =======================
     const database = client.db('jobsDB2');
     const jobsCollection = database.collection('jobsColl2');
@@ -111,10 +114,11 @@ async function run() {
       res.send(result);
     });
 
-    //=====================================================
-    // Send a ping to confirm a successful connection
-    await client.db('admin').command({ ping: 1 });
-    console.log('Pinged your deployment');
+    app.delete('/applications/me/delete/:id', async (req, res) => {
+      const query = { _id: new ObjectId(req.params.id) };
+      const result = await applicationsCollection.deleteOne(query);
+      res.send(result);
+    });
   } catch (error) {
     console.log(error);
   }
