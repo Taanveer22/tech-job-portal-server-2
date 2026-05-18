@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 // instance
 const app = express();
@@ -10,6 +12,7 @@ const port = process.env.PORT || 5000;
 // middlewares
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
 // database
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.89rnkti.mongodb.net/?appName=Cluster0`;
@@ -35,6 +38,21 @@ async function run() {
     const database = client.db('jobsDB2');
     const jobsCollection = database.collection('jobsColl2');
     const applicationsCollection = database.collection('appsColl2');
+
+    // =================   JSON WEB TOKEN  =======================
+    app.post('/jwt/login', (req, res) => {
+      const userPayload = req.body;
+      const tokenValue = jwt.sign(userPayload, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: '1h',
+      });
+
+      res
+        .cookie('token', tokenValue, {
+          httpOnly: true,
+          secure: false,
+        })
+        .send({ success: true });
+    });
 
     // =================   JOBS  =======================
     app.get('/jobs', async (req, res) => {
