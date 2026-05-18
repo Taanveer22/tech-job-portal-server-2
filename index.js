@@ -19,6 +19,30 @@ app.use(
   })
 );
 
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token;
+  // console.log('verify token', token);
+
+  // no token
+  if (!token) {
+    return res.status(401).send({
+      message: 'Unauthorized access',
+    });
+  }
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+    // invalid token
+    if (error) {
+      return res.status(401).send({
+        message: 'Unauthorized Access',
+      });
+    }
+    // save decoded user info
+    req.decoded = decoded;
+    next();
+  });
+};
+
 // database
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.89rnkti.mongodb.net/?appName=Cluster0`;
 // console.log(uri);
@@ -107,7 +131,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get('/applications/me', async (req, res) => {
+    app.get('/applications/me', verifyToken, async (req, res) => {
       const query = { applicant_email: req.query.email };
       const cursor = applicationsCollection.find(query);
       const result = await cursor.toArray();
