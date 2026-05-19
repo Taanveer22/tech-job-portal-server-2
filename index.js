@@ -132,6 +132,12 @@ async function run() {
     });
 
     app.get('/applications/me', verifyToken, async (req, res) => {
+      // token email !== query email
+      if (req.decoded?.email !== req.query?.email) {
+        return res.status(403).send({ message: 'Forbidden Access' });
+      }
+
+      // === read data ===
       const query = { applicant_email: req.query.email };
       const cursor = applicationsCollection.find(query);
       const result = await cursor.toArray();
