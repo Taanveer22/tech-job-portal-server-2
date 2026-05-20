@@ -1,51 +1,88 @@
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 
-// instance
+// ======================================================
+// EXPRESS APP
+// ======================================================
+
 const app = express();
 const port = process.env.PORT || 5000;
 
-// middlewares
+// ======================================================
+// TRUST PROXY
+// ======================================================
+
+// IMPORTANT FOR RENDER + SECURE COOKIES
+app.set('trust proxy', 1);
+
+// ======================================================
+// MIDDLEWARES
+// ======================================================
+
+// parse json body
 app.use(express.json());
+
+// parse cookies
 app.use(cookieParser());
+
+// cors setup
 app.use(
   cors({
-    origin: ['https://tech-job-portal-2.web.app', 'https://tech-job-portal-2.firebaseapp.com'],
+    origin: [
+      'http://localhost:5173',
+      'https://tech-job-portal-2.web.app',
+      'https://tech-job-portal-2.firebaseapp.com',
+    ],
+
     credentials: true,
   })
 );
 
-const verifyToken = (req, res, next) => {
-  const token = req.cookies?.token;
-  // console.log('verify token', token);
+// ======================================================
+// VERIFY TOKEN MIDDLEWARE
+// ======================================================
 
-  // no token
+const verifyToken = (req, res, next) => {
+  // get token from cookies
+  const token = req.cookies?.token;
+
+  // no token found
   if (!token) {
     return res.status(401).send({
       message: 'Unauthorized access',
     });
   }
 
+  // verify jwt token
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
     // invalid token
     if (error) {
       return res.status(401).send({
-        message: 'Unauthorized Access',
+        message: 'Unauthorized access',
       });
     }
-    // save decoded user info
+
+    // save decoded data
     req.decoded = decoded;
+
     next();
   });
 };
 
-// database
+// ======================================================
+// MONGODB URI
+// ======================================================
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.89rnkti.mongodb.net/?appName=Cluster0`;
-// console.log(uri);
+
+// ======================================================
+// MONGODB CLIENT
+// ======================================================
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -55,100 +92,190 @@ const client = new MongoClient(uri, {
   },
 });
 
+// ======================================================
+// DATABASE FUNCTION
+// ======================================================
+
 async function run() {
   try {
-    // Connect the client to the server
+    // connect mongodb
     await client.connect();
+
     console.log('Connected your db');
-    // Send a ping to confirm a successful connection
+
+    // ping mongodb
     await client.db('admin').command({ ping: 1 });
+
     console.log('Pinged your deployment');
 
-    // =================   DATABASE =======================
+    // ======================================================
+    // DATABASE COLLECTIONS
+    // ======================================================
+
     const database = client.db('jobsDB2');
+
     const jobsCollection = database.collection('jobsColl2');
+
     const applicationsCollection = database.collection('appsColl2');
 
-    // =================   JSON WEB TOKEN  =======================
+    // ======================================================
+    // JWT LOGIN
+    // ======================================================
+
     app.post('/jwt/login', (req, res) => {
+      // get user payload
       const userPayload = req.body;
+
+      // create jwt token
       const tokenValue = jwt.sign(userPayload, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: '7d',
       });
 
+      // production check
+      const isProduction = process.env.NODE_ENV === 'production';
+
+      // send cookie
       res
         .cookie('token', tokenValue, {
           httpOnly: true,
-          secure: true,
-          sameSite: 'none',
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+
+          // required for https production
+          secure: isProduction,
+
+          // required for firebase + render
+          sameSite: isProduction ? 'none' : 'lax',
+
+          // 7 days
+          maxAge: 7 * 24 * 60 * 60 * 1000,
         })
-        .send({ success: true });
+        .send({
+          success: true,
+        });
     });
 
+    // ======================================================
+    // JWT LOGOUT
+    // ======================================================
+
     app.post('/jwt/logout', (req, res) => {
+      // production check
+      const isProduction = process.env.NODE_ENV === 'production';
+
+      // clear cookie
       res
         .clearCookie('token', {
           httpOnly: true,
-          secure: true,
-          sameSite: 'none',
+          secure: isProduction,
+          sameSite: isProduction ? 'none' : 'lax',
         })
-        .send({ success: true });
+        .send({
+          success: true,
+        });
     });
 
-    // =================   JOBS  =======================
+    // ======================================================
+    // JWT CHECK ROUTE
+    // ======================================================
+
+    // temporary debugging route
+    app.get('/jwt/check', (req, res) => {
+      console.log(req.cookies);
+
+      res.send({
+        token: req.cookies?.token || null,
+      });
+    });
+
+    // ======================================================
+    // JOB ROUTES
+    // ======================================================
+
+    // get all jobs
     app.get('/jobs', async (req, res) => {
       const email = req.query.email;
+
       let query = {};
+
+      // filter by hr email
       if (email) {
-        query = { hr_email: email };
+        query = {
+          hr_email: email,
+        };
       }
-      const cursor = jobsCollection.find(query);
-      const result = await cursor.toArray();
+
+      const result = await jobsCollection.find(query).toArray();
+
       res.send(result);
     });
 
+    // get single job
     app.get('/jobs/:id', async (req, res) => {
-      const query = { _id: new ObjectId(req.params.id) };
+      const query = {
+        _id: new ObjectId(req.params.id),
+      };
+
       const result = await jobsCollection.findOne(query);
+
       res.send(result);
     });
 
-    app.post('/jobs/add', async (req, res) => {
+    // add new job
+    app.post('/jobs/add', verifyToken, async (req, res) => {
       const doc = req.body;
+
       const result = await jobsCollection.insertOne(doc);
+
       res.send(result);
     });
 
-    app.delete('/jobs/delete/:id', async (req, res) => {
-      const query = { _id: new ObjectId(req.params.id) };
+    // delete job
+    app.delete('/jobs/delete/:id', verifyToken, async (req, res) => {
+      const query = {
+        _id: new ObjectId(req.params.id),
+      };
+
       const result = await jobsCollection.deleteOne(query);
+
       res.send(result);
     });
 
-    // =================   APPLICATIONS  =======================
+    // ======================================================
+    // APPLICATION ROUTES
+    // ======================================================
 
-    app.get('/applications/admin/view/:jobId', async (req, res) => {
-      const query = { job_id: req.params.jobId };
+    // admin view applications
+    app.get('/applications/admin/view/:jobId', verifyToken, async (req, res) => {
+      const query = {
+        job_id: req.params.jobId,
+      };
+
       const result = await applicationsCollection.find(query).toArray();
+
       res.send(result);
     });
 
+    // my applications
     app.get('/applications/me', verifyToken, async (req, res) => {
-      // token email !== query email
+      // token email must match query email
       if (req.decoded?.email !== req.query?.email) {
-        return res.status(403).send({ message: 'Forbidden Access' });
+        return res.status(403).send({
+          message: 'Forbidden access',
+        });
       }
 
-      // === read data ===
-      const query = { applicant_email: req.query.email };
-      const cursor = applicationsCollection.find(query);
-      const result = await cursor.toArray();
+      // find applications
+      const query = {
+        applicant_email: req.query.email,
+      };
 
-      // === aggregate data ===
+      const result = await applicationsCollection.find(query).toArray();
+
+      // aggregate related job info
       for (const item of result) {
-        // console.log(item.job_id);
-        const querySecond = { _id: new ObjectId(item.job_id) };
+        const querySecond = {
+          _id: new ObjectId(item.job_id),
+        };
+
         const resultSecond = await jobsCollection.findOne(querySecond);
 
         if (resultSecond) {
@@ -163,61 +290,91 @@ async function run() {
       res.send(result);
     });
 
-    app.patch('/applications/admin/status/:id', async (req, res) => {
-      const query = { _id: new ObjectId(req.params.id) };
+    // update application status
+    app.patch('/applications/admin/status/:id', verifyToken, async (req, res) => {
+      const query = {
+        _id: new ObjectId(req.params.id),
+      };
+
       const updateDoc = {
         $set: {
           status: req.body.status,
         },
       };
+
       const result = await applicationsCollection.updateOne(query, updateDoc);
+
       res.send(result);
     });
 
-    app.post('/applications/me/apply', async (req, res) => {
+    // apply for job
+    app.post('/applications/me/apply', verifyToken, async (req, res) => {
       const doc = req.body;
+
+      // save application
       const result = await applicationsCollection.insertOne(doc);
-      // console.log(result);
 
-      // === agreegate data ===
-      const querySecond = { _id: new ObjectId(doc.job_id) };
+      // find job
+      const querySecond = {
+        _id: new ObjectId(doc.job_id),
+      };
+
       const resultSecond = await jobsCollection.findOne(querySecond);
-      // console.log(resultSecond);
 
+      // update application count
       let count = 0;
+
       if (resultSecond?.applicationCount) {
         count = resultSecond.applicationCount + 1;
       } else {
         count = 1;
       }
 
-      const queryThird = { _id: new ObjectId(doc.job_id) };
+      const queryThird = {
+        _id: new ObjectId(doc.job_id),
+      };
+
       const updateDocThird = {
         $set: {
           applicationCount: count,
         },
       };
-      const resultThird = await jobsCollection.updateOne(queryThird, updateDocThird);
-      // console.log(resultThird);
+
+      await jobsCollection.updateOne(queryThird, updateDocThird);
 
       res.send(result);
     });
 
-    app.delete('/applications/me/delete/:id', async (req, res) => {
-      const query = { _id: new ObjectId(req.params.id) };
+    // delete application
+    app.delete('/applications/me/delete/:id', verifyToken, async (req, res) => {
+      const query = {
+        _id: new ObjectId(req.params.id),
+      };
+
       const result = await applicationsCollection.deleteOne(query);
+
       res.send(result);
     });
   } catch (error) {
     console.log(error);
   }
 }
+
+// run database function
 run();
+
+// ======================================================
+// ROOT ROUTE
+// ======================================================
 
 app.get('/', (req, res) => {
   res.send('Server is running');
 });
 
+// ======================================================
+// SERVER LISTEN
+// ======================================================
+
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Server running on port ${port}`);
 });
