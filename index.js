@@ -73,7 +73,7 @@ async function run() {
     app.post('/jwt/login', (req, res) => {
       const userPayload = req.body;
       const tokenValue = jwt.sign(userPayload, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: '2h',
+        expiresIn: '7d',
       });
 
       res
@@ -81,6 +81,7 @@ async function run() {
           httpOnly: true,
           secure: true,
           sameSite: 'none',
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
         })
         .send({ success: true });
     });
@@ -91,6 +92,7 @@ async function run() {
           httpOnly: true,
           secure: true,
           sameSite: 'none',
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
         })
         .send({ success: true });
     });
