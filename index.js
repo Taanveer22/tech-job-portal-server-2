@@ -14,7 +14,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: ['http://localhost:5173'],
+    origin: ['https://tech-job-portal-2.web.app', 'https://tech-job-portal-2.firebaseapp.com'],
     credentials: true,
   })
 );
@@ -63,6 +63,7 @@ async function run() {
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment');
+
     // =================   DATABASE =======================
     const database = client.db('jobsDB2');
     const jobsCollection = database.collection('jobsColl2');
@@ -72,13 +73,14 @@ async function run() {
     app.post('/jwt/login', (req, res) => {
       const userPayload = req.body;
       const tokenValue = jwt.sign(userPayload, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: '1h',
+        expiresIn: '2h',
       });
 
       res
         .cookie('token', tokenValue, {
           httpOnly: true,
-          secure: false,
+          secure: true,
+          sameSite: 'none',
         })
         .send({ success: true });
     });
@@ -87,7 +89,8 @@ async function run() {
       res
         .clearCookie('token', {
           httpOnly: true,
-          secure: false,
+          secure: true,
+          sameSite: 'none',
         })
         .send({ success: true });
     });
@@ -111,7 +114,6 @@ async function run() {
     });
 
     app.post('/jobs/add', async (req, res) => {
-      console.log(req.body);
       const doc = req.body;
       const result = await jobsCollection.insertOne(doc);
       res.send(result);
@@ -195,7 +197,7 @@ async function run() {
         },
       };
       const resultThird = await jobsCollection.updateOne(queryThird, updateDocThird);
-      console.log(resultThird);
+      // console.log(resultThird);
 
       res.send(result);
     });
