@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -9,16 +8,8 @@ const cookieParser = require('cookie-parser');
 // ======================================================
 // EXPRESS APP
 // ======================================================
-
 const app = express();
 const port = process.env.PORT || 5000;
-
-// ======================================================
-// TRUST PROXY
-// ======================================================
-
-// IMPORTANT FOR RENDER + SECURE COOKIES
-app.set('trust proxy', 1);
 
 // ======================================================
 // MIDDLEWARES
@@ -43,33 +34,24 @@ app.use(
   })
 );
 
-// ======================================================
-// VERIFY TOKEN MIDDLEWARE
-// ======================================================
-
+// verify token
 const verifyToken = (req, res, next) => {
-  // get token from cookies
   const token = req.cookies?.token;
 
-  // no token found
   if (!token) {
     return res.status(401).send({
-      message: 'Unauthorized access',
+      message: 'No token..Unauthorized access',
     });
   }
 
-  // verify jwt token
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
-    // invalid token
-    if (error) {
-      return res.status(401).send({
-        message: 'Unauthorized access',
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).send({
+        message: 'Invalid token',
       });
     }
 
-    // save decoded data
     req.decoded = decoded;
-
     next();
   });
 };
@@ -123,6 +105,8 @@ async function run() {
     // ======================================================
 
     app.post('/jwt/login', (req, res) => {
+      // console.log(process.env.ACCESS_TOKEN_SECRET);
+
       // get user payload
       const userPayload = req.body;
 
@@ -138,14 +122,8 @@ async function run() {
       res
         .cookie('token', tokenValue, {
           httpOnly: true,
-
-          // required for https production
-          secure: isProduction,
-
-          // required for firebase + render
+          secure: isProduction ? true : false,
           sameSite: isProduction ? 'none' : 'lax',
-
-          // 7 days
           maxAge: 7 * 24 * 60 * 60 * 1000,
         })
         .send({
@@ -165,25 +143,12 @@ async function run() {
       res
         .clearCookie('token', {
           httpOnly: true,
-          secure: isProduction,
+          secure: isProduction ? true : false,
           sameSite: isProduction ? 'none' : 'lax',
         })
         .send({
           success: true,
         });
-    });
-
-    // ======================================================
-    // JWT CHECK ROUTE
-    // ======================================================
-
-    // temporary debugging route
-    app.get('/jwt/check', (req, res) => {
-      console.log(req.cookies);
-
-      res.send({
-        token: req.cookies?.token || null,
-      });
     });
 
     // ======================================================
@@ -290,7 +255,7 @@ async function run() {
       res.send(result);
     });
 
-    // update application status
+    // admin update application status
     app.patch('/applications/admin/status/:id', verifyToken, async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
@@ -307,21 +272,18 @@ async function run() {
       res.send(result);
     });
 
-    // apply for job
+    // my apply for job
     app.post('/applications/me/apply', verifyToken, async (req, res) => {
       const doc = req.body;
 
-      // save application
       const result = await applicationsCollection.insertOne(doc);
 
-      // find job
       const querySecond = {
         _id: new ObjectId(doc.job_id),
       };
 
       const resultSecond = await jobsCollection.findOne(querySecond);
 
-      // update application count
       let count = 0;
 
       if (resultSecond?.applicationCount) {
