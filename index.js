@@ -24,7 +24,14 @@ app.use(express.json());
 // parse cookies
 app.use(cookieParser());
 
-// cors setup
+// ✅ FIX 1: Google popup fix — Cross-Origin-Opener-Policy header
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  next();
+});
+
+// ✅ FIX 2:
 app.use(
   cors({
     origin: [
@@ -33,7 +40,6 @@ app.use(
       'https://tech-job-portal-2.firebaseapp.com',
       'https://tech-job-portal-2.netlify.app',
     ],
-
     credentials: true,
   })
 );
@@ -109,8 +115,6 @@ async function run() {
     // ======================================================
 
     app.post('/jwt/login', (req, res) => {
-      // console.log(process.env.ACCESS_TOKEN_SECRET);
-
       // get user payload
       const userPayload = req.body;
 
@@ -119,15 +123,12 @@ async function run() {
         expiresIn: '7d',
       });
 
-      // production check
-      const isProduction = process.env.NODE_ENV === 'production';
-
-      // send cookie
+      // ✅ FIX 3:
       res
         .cookie('token', tokenValue, {
           httpOnly: true,
-          secure: isProduction ? true : false,
-          sameSite: isProduction ? 'none' : 'lax',
+          secure: true,
+          sameSite: 'none',
           maxAge: 7 * 24 * 60 * 60 * 1000,
         })
         .send({
@@ -140,15 +141,12 @@ async function run() {
     // ======================================================
 
     app.post('/jwt/logout', (req, res) => {
-      // production check
-      const isProduction = process.env.NODE_ENV === 'production';
-
-      // clear cookie
+      // ✅ FIX 3 (same):
       res
         .clearCookie('token', {
           httpOnly: true,
-          secure: isProduction ? true : false,
-          sameSite: isProduction ? 'none' : 'lax',
+          secure: true,
+          sameSite: 'none',
         })
         .send({
           success: true,
@@ -162,18 +160,14 @@ async function run() {
     // get all jobs
     app.get('/jobs', async (req, res) => {
       const email = req.query.email;
-
       let query = {};
-
       // filter by hr email
       if (email) {
         query = {
           hr_email: email,
         };
       }
-
       const result = await jobsCollection.find(query).toArray();
-
       res.send(result);
     });
 
@@ -182,29 +176,23 @@ async function run() {
       const query = {
         _id: new ObjectId(req.params.id),
       };
-
       const result = await jobsCollection.findOne(query);
-
       res.send(result);
     });
 
     // add new job
-    app.post('/jobs/add', verifyToken, async (req, res) => {
+    app.post('/jobs/add', async (req, res) => {
       const doc = req.body;
-
       const result = await jobsCollection.insertOne(doc);
-
       res.send(result);
     });
 
     // delete job
-    app.delete('/jobs/delete/:id', verifyToken, async (req, res) => {
+    app.delete('/jobs/delete/:id', async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
       };
-
       const result = await jobsCollection.deleteOne(query);
-
       res.send(result);
     });
 
@@ -212,18 +200,7 @@ async function run() {
     // APPLICATION ROUTES
     // ======================================================
 
-    // admin view applications
-    app.get('/applications/admin/view/:jobId', verifyToken, async (req, res) => {
-      const query = {
-        job_id: req.params.jobId,
-      };
-
-      const result = await applicationsCollection.find(query).toArray();
-
-      res.send(result);
-    });
-
-    // my applications
+    // my applications (token)
     app.get('/applications/me', verifyToken, async (req, res) => {
       // token email must match query email
       if (req.decoded?.email !== req.query?.email) {
@@ -259,25 +236,17 @@ async function run() {
       res.send(result);
     });
 
-    // admin update application status
-    app.patch('/applications/admin/status/:id', verifyToken, async (req, res) => {
+    // admin view applications
+    app.get('/applications/admin/view/:jobId', async (req, res) => {
       const query = {
-        _id: new ObjectId(req.params.id),
+        job_id: req.params.jobId,
       };
-
-      const updateDoc = {
-        $set: {
-          status: req.body.status,
-        },
-      };
-
-      const result = await applicationsCollection.updateOne(query, updateDoc);
-
+      const result = await applicationsCollection.find(query).toArray();
       res.send(result);
     });
 
     // my apply for job
-    app.post('/applications/me/apply', verifyToken, async (req, res) => {
+    app.post('/applications/me/apply', async (req, res) => {
       const doc = req.body;
 
       const result = await applicationsCollection.insertOne(doc);
@@ -311,14 +280,26 @@ async function run() {
       res.send(result);
     });
 
-    // delete application
-    app.delete('/applications/me/delete/:id', verifyToken, async (req, res) => {
+    // admin update application status
+    app.patch('/applications/admin/status/:id', async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
       };
+      const updateDoc = {
+        $set: {
+          status: req.body.status,
+        },
+      };
+      const result = await applicationsCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
 
+    //my deleted application
+    app.delete('/applications/me/delete/:id', async (req, res) => {
+      const query = {
+        _id: new ObjectId(req.params.id),
+      };
       const result = await applicationsCollection.deleteOne(query);
-
       res.send(result);
     });
   } catch (error) {
