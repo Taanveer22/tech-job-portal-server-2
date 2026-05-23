@@ -31,6 +31,7 @@ app.use(
       'http://localhost:5173',
       'https://tech-job-portal-2.web.app',
       'https://tech-job-portal-2.firebaseapp.com',
+      'https://tech-job-portal-2.netlify.app',
     ],
 
     credentials: true,
