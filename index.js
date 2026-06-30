@@ -24,14 +24,7 @@ app.use(express.json());
 // parse cookies
 app.use(cookieParser());
 
-// ✅ FIX 1: Google popup fix — Cross-Origin-Opener-Policy header
-app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  next();
-});
-
-// ✅ FIX 2:
+// cors options
 app.use(
   cors({
     origin: [
@@ -92,12 +85,10 @@ async function run() {
   try {
     // connect mongodb
     await client.connect();
-
     console.log('Connected your db');
 
     // ping mongodb
     await client.db('admin').command({ ping: 1 });
-
     console.log('Pinged your deployment');
 
     // ======================================================
@@ -123,7 +114,6 @@ async function run() {
         expiresIn: '7d',
       });
 
-      // ✅ FIX 3:
       res
         .cookie('token', tokenValue, {
           httpOnly: true,
@@ -141,7 +131,6 @@ async function run() {
     // ======================================================
 
     app.post('/jwt/logout', (req, res) => {
-      // ✅ FIX 3 (same):
       res
         .clearCookie('token', {
           httpOnly: true,
@@ -156,12 +145,9 @@ async function run() {
     // ======================================================
     // JOB ROUTES
     // ======================================================
-
-    // get all jobs
     app.get('/jobs', async (req, res) => {
       const email = req.query.email;
       let query = {};
-      // filter by hr email
       if (email) {
         query = {
           hr_email: email,
@@ -171,7 +157,6 @@ async function run() {
       res.send(result);
     });
 
-    // get single job
     app.get('/jobs/:id', async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
@@ -180,15 +165,13 @@ async function run() {
       res.send(result);
     });
 
-    // add new job
     app.post('/jobs/add', async (req, res) => {
       const doc = req.body;
       const result = await jobsCollection.insertOne(doc);
       res.send(result);
     });
 
-    // delete job
-    app.delete('/jobs/delete/:id', async (req, res) => {
+    app.delete('/jobs/:id', async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
       };
@@ -236,8 +219,8 @@ async function run() {
       res.send(result);
     });
 
-    // admin view applications
-    app.get('/applications/admin/view/:jobId', async (req, res) => {
+    // hr view applications
+    app.get('/applications/view/:jobId', async (req, res) => {
       const query = {
         job_id: req.params.jobId,
       };
@@ -280,8 +263,8 @@ async function run() {
       res.send(result);
     });
 
-    // admin update application status
-    app.patch('/applications/admin/status/:id', async (req, res) => {
+    // hr update application status
+    app.patch('/applications/status/:id', async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
       };
@@ -295,7 +278,7 @@ async function run() {
     });
 
     //my deleted application
-    app.delete('/applications/me/delete/:id', async (req, res) => {
+    app.delete('/applications/me/:id', async (req, res) => {
       const query = {
         _id: new ObjectId(req.params.id),
       };
@@ -307,7 +290,6 @@ async function run() {
   }
 }
 
-// run database function
 run();
 
 // ======================================================
